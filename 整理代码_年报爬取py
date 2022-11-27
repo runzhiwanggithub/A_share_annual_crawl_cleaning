@@ -1,0 +1,82 @@
+# -*- coding: gbk -*- 
+import pandas as pd
+import requests
+import random
+import time
+import os
+from tqdm import tqdm
+import datetime
+import threading
+#导入包，哪个import失败采用pip安装
+
+data=pd.read_excel('E:\\几何画板\\公司竞争战略指标_2020.xlsx')#导入需要爬取的年报以及相关链接，需要修改
+
+def random_ua():#随机请求头，减轻反爬虫影响
+    user_agent_list = ["Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.102 Safari/537.36 Edge/18.18362",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/73.0.3683.103 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36 OPR/63.0.3368.43",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:69.0) Gecko/20100101 Firefox/69.0",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/55.0.2883.87 UBrowser/6.2.3964.2 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.98 Safari/537.36 LBBROWSER",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36 SE 2.X MetaSr 1.0",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.79 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36 QIHU 360SE",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36 QIHU 360EE",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3947.100 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/70.0.3538.25 Safari/537.36 Core/1.70.3722.400 QQBrowser/10.5.3739.400",
+    "Mozilla/5.0 (Windows NT 10.0; WOW64; Trident/7.0; LCTE; rv:11.0) like Gecko"]
+    return random.choice(user_agent_list)
+
+def get_filepath(code,firm,year):#找到存储路径
+    file_path = 'F:\\财务报告\\'#要修改，这是存储pdf的路径
+    file_name = "{}-{}-{}年年度报告.pdf".format(code,firm,year)
+    file_full_name = os.path.join(file_path,file_name)
+    return file_full_name
+
+def download_pdf(url,file_full_name):#下载pdf
+    headers = {'User-Agent':random_ua()}
+    res = requests.get(url,headers=headers)
+    with open(file_full_name,"wb") as fp:
+        for chunk in res.iter_content(chunk_size=1024):
+            if chunk:
+                fp.write(chunk)
+                
+def PDFrun(rawdata):
+    rawdata['year'] = rawdata['rep_period'].dt.year
+    for iloc in tqdm(range(rawdata.shape[0])):
+        firm = rawdata.at[iloc,'security_name'].replace("*","") # 去掉*ST的*号，文件命名不含特殊符号
+        code = rawdata.at[iloc,'security_code']
+        year = rawdata.at[iloc,'year']
+        pdf_url = rawdata.at[iloc,'rep_link']
+        print("开始下载{}，股票代码{}的{}年报".format(firm,code,year))
+        file_full_name = get_filepath(code,firm,year)
+        download_pdf(pdf_url,file_full_name)
+        time.sleep(random.uniform(3,4))
+        print("===========下载完成==========")
+
+def split_dataframe_by_position(df, splits):
+    
+    dataframes = []
+    index_to_split = len(df) // splits
+    start = 0
+    end = index_to_split
+    for split in range(splits):
+        temporary_df = df.loc[start:end, :]
+        dataframes.append(temporary_df)
+        start += index_to_split
+        end += index_to_split
+    for df in dataframes:
+        df.reset_index(drop = True,inplace= True)
+        
+    return dataframes
+    
+#多线程下载
+if __name__ == '__main__':
+    starttime = datetime.datetime.now()
+    split_dataframes_lst = split_dataframe_by_position(data, 5)
+    for i in split_dataframes_lst:
+        threading.Thread(target=PDFrun, args=(i,)).start()
+    endtime = datetime.datetime.now()
+    print('time used', endtime - starttime)
